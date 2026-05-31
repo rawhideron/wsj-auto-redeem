@@ -1,0 +1,3 @@
+SHELL=/bin/bash
+# Run at 6:10 AM every 2 days (48h interval gives 24h buffer before 72h code expiry).
+10 6 */2 * * . /app/.env-cron && cd /app && xvfb-run -a --server-args="-screen 0 1440x900x24" /usr/local/bin/node /app/redeem.js >> /var/log/cron.log 2>&1

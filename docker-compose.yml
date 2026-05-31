@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  wsj-redeem:
+    build: .
+    container_name: wsj-redeem
+    volumes:
+      - ./cookies:/app/cookies
+    environment:
+      - TZ=America/New_York
+    env_file:
+      - .env
+    restart: unless-stopped

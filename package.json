@@ -1,0 +1,25 @@
+{
+  "name": "wsj-auto-redeem",
+  "version": "1.0.0",
+  "description": "Automates Fairview Library WSJ redemption flow",
+  "main": "redeem.js",
+  "dependencies": {
+    "puppeteer-real-browser": "^1.4.4"
+  },
+  "scripts": {
+    "start": "node redeem.js",
+    "test": "node --check redeem.js"
+  },
+  "keywords": [
+    "puppeteer",
+    "wsj",
+    "automation",
+    "library"
+  ],
+  "author": "",
+  "license": "MIT",
+  "overrides": {
+    "basic-ftp": ">=5.3.1",
+    "ip-address": ">=10.1.1"
+  }
+}
