@@ -311,6 +311,15 @@ async function loginToWSJ(page) {
     return true;
   }
 
+  // fetch-user is a loading page that JS-redirects after an async API call.
+  // Wait for it to navigate away before checking where we landed.
+  if (/fetch-user/i.test(page.url())) {
+    console.log('[wsj] On fetch-user — waiting for redirect...');
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+    await randomDelay(500, 1000);
+    console.log(`[wsj] fetch-user settled at: ${page.url()}`);
+  }
+
   // On the register page: click the SIGN IN link
   const onRegister = /register/i.test(page.url());
   if (onRegister) {
