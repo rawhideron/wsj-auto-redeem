@@ -245,7 +245,7 @@ async function openWSJFromFairview(page) {
   await randomDelay(2000, 4000);
 
   console.log(`[fairview] Arrived at: ${page.url()}`);
-  return page;
+  return wsjHref;
 }
 
 // ── Terms checkbox + Register (used when already authenticated via cookies) ────
@@ -298,7 +298,7 @@ async function acceptTermsAndRegister(page) {
 // ── WSJ sign-in ────────────────────────────────────────────────────────────────
 // Handles the partner.wsj.com flow:
 //   register page → click "SIGN IN" → accounts.wsj.com (email → password, two-step)
-async function loginToWSJ(page) {
+async function loginToWSJ(page, redemptionUrl) {
   if (!WSJ_EMAIL || !WSJ_PASSWORD) {
     console.log('[wsj] No credentials — skipping sign-in');
     return false;
@@ -318,6 +318,18 @@ async function loginToWSJ(page) {
     await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
     await randomDelay(500, 1000);
     console.log(`[wsj] fetch-user settled at: ${page.url()}`);
+  }
+
+  // If the cached session thinks we already have a subscription, it might be stale for the new code.
+  // Clear cookies and navigate back to the redemption URL to force a fresh login/redemption.
+  if (/welcome-back/i.test(page.url())) {
+    console.log('[wsj] On welcome-back page — session may be stale. Clearing cookies and re-navigating to redemption link...');
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
+    if (redemptionUrl) {
+      await page.goto(redemptionUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await randomDelay(2000, 3000);
+    }
   }
 
   // On the register page: click the SIGN IN link
@@ -457,9 +469,12 @@ async function isSubscriptionActivated(page) {
 
     const url  = page.url();
     // Positive signals: fresh redemption confirmed
-    if (/activated|subscription confirmed|thank you|access granted|welcome back|you now have access/i.test(text)) return true;
+    if (/activated|subscription confirmed|thank you|access granted|you now have access/i.test(text)) return true;
     // Already subscribed / code already used — subscription is still active, count as success
-    if (/already subscribed|already have (an? )?access|already have (an? )?subscription|code (has )?already been redeemed|currently (have )?access/i.test(text)) return true;
+    if (/already subscribed|already have (an? )?access|already have (an? )?subscription|code (has )?already been redeemed|currently (have )?access/i.test(text)) {
+      if (/welcome-back/i.test(url)) return false; // Force logout logic in loginToWSJ instead of falsely succeeding
+      return true;
+    }
     // Landed on WSJ proper (not the partner/login flow) = redemption went through
     if (/^https:\/\/(www\.)?wsj\.com\//i.test(url) && !/login|sign-?in/i.test(url)) return true;
     return false;
@@ -520,7 +535,7 @@ async function redeemSubscription() {
     }
 
     // Navigate Fairview → partner.wsj.com redemption URL
-    await openWSJFromFairview(page);
+    const redemptionUrl = await openWSJFromFairview(page);
 
     // Debug screenshot
     await page.screenshot({ path: path.join(__dirname, 'cookies', 'wsj-landing.png'), fullPage: true });
@@ -532,7 +547,7 @@ async function redeemSubscription() {
     }
 
     // Sign in
-    const signedIn = await loginToWSJ(page);
+    const signedIn = await loginToWSJ(page, redemptionUrl);
 
     // Persist session cookies
     const cookies = await page.cookies();
