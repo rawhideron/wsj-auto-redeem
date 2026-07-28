@@ -432,7 +432,29 @@ async function loginToWSJ(page) {
 // ── Outcome detection ─────────────────────────────────────────────────────────
 async function isSubscriptionActivated(page) {
   try {
-    const text = await page.evaluate(() => document.body.innerText.toLowerCase());
+    let text = await page.evaluate(() => document.body.innerText.toLowerCase());
+    
+    // If we're on the confirmation page, wait for the redirect to finalize the membership!
+    if (/redirected to complete your membership/i.test(text)) {
+      console.log('[wsj] On confirmation page — waiting for redirect to finalize membership...');
+      const btnClicked = await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll('a, button, [role="button"]'))
+          .find(el => /ok,? let'?s go/i.test(el.innerText || el.textContent || ''));
+        if (btn) { btn.click(); return true; }
+        return false;
+      });
+      
+      if (btnClicked) {
+        console.log('[wsj] Clicked "OK, LET\'S GO"');
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+      } else {
+        await new Promise(r => setTimeout(r, 7000)); // Fallback: wait for the 6 second auto-redirect
+      }
+      
+      // Re-evaluate text and URL after redirect
+      text = await page.evaluate(() => document.body.innerText.toLowerCase());
+    }
+
     const url  = page.url();
     // Positive signals: fresh redemption confirmed
     if (/activated|subscription confirmed|thank you|access granted|welcome back|you now have access/i.test(text)) return true;
