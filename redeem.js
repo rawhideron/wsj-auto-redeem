@@ -18,6 +18,7 @@ const USER_DATA_DIR        = process.env.USER_DATA_DIR        || path.join(__dir
 const ENCRYPT_KEY          = process.env.COOKIE_ENCRYPTION_KEY || '';
 const COOKIE_FILE          = path.join(__dirname, 'cookies', 'wsj-cookies.json');
 const HISTORY_FILE         = path.join(__dirname, 'cookies', 'history.json');
+const VERIFICATION_CHALLENGE_RE = /verification required|slide right to (secure|verify) your access/i;
 
 // ── Cookie encryption ─────────────────────────────────────────────────────────
 async function deriveKey(passphrase, salt) {
@@ -350,6 +351,12 @@ async function loginToWSJ(page) {
     const text = await page.evaluate(() => document.body.innerText);
     console.log(`[wsj] Sign-in step ${step + 1} — ${url}`);
 
+    if (VERIFICATION_CHALLENGE_RE.test(text)) {
+      console.log('[wsj] Bot-verification challenge detected — cannot proceed automatically.');
+      console.log('[wsj] Run `node redeem.js --manual` to log in by hand and refresh cookies.');
+      return false;
+    }
+
     if (await isSubscriptionActivated(page)) {
       console.log('[wsj] Sign-in complete — subscription activated');
       return true;
@@ -469,7 +476,7 @@ async function isSubscriptionActivated(page) {
 async function isBlocked(page) {
   try {
     const text = await page.evaluate(() => document.body.innerText.toLowerCase());
-    return /blocked|access denied|robot|captcha detected/i.test(text);
+    return /blocked|access denied|robot|captcha detected/i.test(text) || VERIFICATION_CHALLENGE_RE.test(text);
   } catch { return false; }
 }
 
@@ -553,6 +560,9 @@ async function redeemSubscription() {
       const msg = alreadyActive ? '\n✅ Subscription already active — skipping redundant redemption' : '\n✅ WSJ redemption succeeded!';
       console.log(msg);
       await logAttempt(true, alreadyActive ? 'already active' : finalUrl);
+    } else if (VERIFICATION_CHALLENGE_RE.test(finalText)) {
+      console.log('\n🛑 Bot-verification challenge blocking sign-in — run `node redeem.js --manual` to log in by hand and refresh cookies');
+      await logAttempt(false, 'verification challenge — manual login required');
     } else if (/sign.?in|log.?in|register/i.test(finalText)) {
       console.log('\n❌ Still on auth page — sign-in failed');
       await logAttempt(false, 'auth failed');
